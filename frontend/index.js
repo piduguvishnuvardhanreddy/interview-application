@@ -7,9 +7,11 @@ let recordedBlob = null;
 let currentSubject = null;
 let isSpeaking = false;
 let currentAudio = null;
-const API_BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-    ? "http://127.0.0.1:5000"
-    : ""; // When deployed on the same platform or manually set
+const API_BASE_URL =
+    window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "localhost"
+        ? "http://127.0.0.1:5000"
+        : "https://interview-assistant-backend-y5wm.onrender.com";
 
 // DOM Elements
 const welcomeState = document.getElementById("welcomeState");
