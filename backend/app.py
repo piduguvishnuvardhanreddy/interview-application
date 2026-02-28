@@ -1,4 +1,4 @@
-from flask import Flask,request
+from flask import Flask, request, Response
 from flask_cors import CORS
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
@@ -128,61 +128,69 @@ def speech_to_text(audio_path):
 @app.route("/start-interview", methods=["POST"])
 def start_interview():
     global question_count, current_subject, checkpointer, agent
-    data = request.json
-    current_subject = data.get("subject", "Python")
-    question_count = 1
-    checkpointer = InMemorySaver()
-    agent = create_agent(
-        model=model,
-        tools=[],
-        checkpointer=checkpointer
-    )
-    config = {"configurable": {"thread_id": thread_id}}
-    formatted_prompt = INTERVIEW_PROMPT.format(subject=current_subject)
-    response = agent.invoke({
-        "messages": [
-            {"role": "system", "content": formatted_prompt},
-            {"role": "user", "content": f"Start the interview with a warm greeting and ask the first question about {current_subject}. Keep it SHORT (1-2 sentences)."}
-        ]
-    }, config=config)
-    question = response["messages"][-1].content
-    print(f"\n[Question {question_count}] {question}")
-    return stream_audio(question), {"Content-Type": "text/plain"} 
+    try:
+        data = request.json
+        current_subject = data.get("subject", "Python")
+        question_count = 1
+        checkpointer = InMemorySaver()
+        agent = create_agent(
+            model=model,
+            tools=[],
+            checkpointer=checkpointer
+        )
+        config = {"configurable": {"thread_id": thread_id}}
+        formatted_prompt = INTERVIEW_PROMPT.format(subject=current_subject)
+        response = agent.invoke({
+            "messages": [
+                {"role": "system", "content": formatted_prompt},
+                {"role": "user", "content": f"Start the interview with a warm greeting and ask the first question about {current_subject}. Keep it SHORT (1-2 sentences)."}
+            ]
+        }, config=config)
+        question = response["messages"][-1].content
+        print(f"\n[Question {question_count}] {question}")
+        return Response(stream_audio(question), content_type="text/plain")
+    except Exception as e:
+        print(f"[start-interview error] {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/submit-answer", methods=["POST"])
-def submit_answer():    
-    global question_count 
-    audio_file = request.files["audio"] 
-    question_count += 1
-    temp_path = (tempfile.NamedTemporaryFile(delete=False, suffix=".webm")).name
-    audio_file.save(temp_path)
-    answer = speech_to_text(temp_path) 
-    
-    os.unlink(temp_path) 
-    if not answer:
-        answer = "Empty answer received." 
-    config = {"configurable": {"thread_id": thread_id}}
-    agent.invoke({"messages": [{"role": "system", "content": answer}]}, config=config)
-    prompt = f"""The candidate just answered question {question_count - 1}.
- 
+def submit_answer():
+    global question_count
+    try:
+        audio_file = request.files["audio"]
+        question_count += 1
+        temp_path = (tempfile.NamedTemporaryFile(delete=False, suffix=".webm")).name
+        audio_file.save(temp_path)
+        answer = speech_to_text(temp_path)
+
+        os.unlink(temp_path)
+        if not answer:
+            answer = "Empty answer received."
+        config = {"configurable": {"thread_id": thread_id}}
+        agent.invoke({"messages": [{"role": "system", "content": answer}]}, config=config)
+        prompt = f"""The candidate just answered question {question_count - 1}.
+
     Look at their ACTUAL answer above. Do NOT assume or make up what they said.
-    
+
     Now ask question {question_count} of 5:
     1. Briefly acknowledge what they ACTUALLY said (1 sentence) - quote their exact words if needed
     2. Ask your next question that builds on their REAL response (1-2 sentences)
     3. If they said "I don't know" or gave a wrong answer, acknowledge that and ask something simpler
     4. Keep the TOTAL response under 3 sentences
-    
+
     Be conversational but CONCISE. Only reference what they truly said."""
-    response = agent.invoke({"messages": [{"role": "user", "content": prompt}]}, config=config)
-    question = response["messages"][-1].content
-    print(f"\n[Question {question_count}] {question}") 
-    return (stream_audio(question),
-        {
-        'Content-Type': 'text/plain',
-        'X-Question-Number': str(question_count)
-        })
+        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]}, config=config)
+        question = response["messages"][-1].content
+        print(f"\n[Question {question_count}] {question}")
+        return Response(
+            stream_audio(question),
+            content_type="text/plain",
+            headers={"X-Question-Number": str(question_count)}
+        )
+    except Exception as e:
+        print(f"[submit-answer error] {e}")
+        return jsonify({"error": str(e)}), 500
     
 @app.route("/get-feedback", methods=["POST"]) 
 def get_feedback():

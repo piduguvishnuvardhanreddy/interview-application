@@ -424,9 +424,15 @@ async function getFeedback() {
 
         if (data.success) {
             displayFeedback(data.feedback);
+        } else {
+            console.error("Feedback error:", data.error, "\nRaw:", data.raw);
+            getFeedbackBtn.textContent = "Retry Feedback";
+            getFeedbackBtn.disabled = false;
+            alert("Could not generate feedback. Please try again.");
         }
     } catch (error) {
-        getFeedbackBtn.textContent = "Error - Retry";
+        console.error("getFeedback fetch error:", error);
+        getFeedbackBtn.textContent = "Retry Feedback";
         getFeedbackBtn.disabled = false;
     }
 }
