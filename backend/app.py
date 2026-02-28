@@ -190,10 +190,28 @@ def get_feedback():
     }, config=config)
     text = response["messages"][-1].content
     print(f"\n[Feedback Generated]\n{text}\n")
-    cleaned = text.strip()
-    if "```" in cleaned:
-        cleaned = cleaned.split("```")[1].replace("json", "").strip()
-    feedback = json.loads(cleaned)
+
+    feedback = None
+    try:
+        cleaned = text.strip()
+
+        # Strategy 1: extract from ```json ... ``` block
+        if "```json" in cleaned:
+            cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+        # Strategy 2: extract from ``` ... ``` block
+        elif "```" in cleaned:
+            cleaned = cleaned.split("```")[1].replace("json", "", 1).strip()
+        # Strategy 3: find first { and last } to extract raw JSON
+        else:
+            start = cleaned.find("{")
+            end = cleaned.rfind("}") + 1
+            if start != -1 and end != 0:
+                cleaned = cleaned[start:end]
+
+        feedback = json.loads(cleaned)
+    except Exception as e:
+        print(f"[Feedback Parse Error] {e}\nRaw text:\n{text}")
+        return jsonify({"success": False, "error": f"Failed to parse feedback: {str(e)}", "raw": text}), 500
 
     return jsonify({"success": True, "feedback": feedback})
 
